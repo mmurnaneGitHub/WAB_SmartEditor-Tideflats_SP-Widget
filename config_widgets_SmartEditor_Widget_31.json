@@ -1,0 +1,305 @@
+{
+  "editor": {
+    "layerInfos": [
+      {
+        "featureLayer": {
+          "id": "Tideflats_Subarea_Plan_Comments_3016"
+        },
+        "disableGeometryUpdate": false,
+        "allowUpdateOnly": false,
+        "allowDelete": false,
+        "fieldInfos": [
+          {
+            "fieldName": "Contact",
+            "label": "Contact Info (Optional)",
+            "isEditable": true,
+            "visible": true
+          },
+          {
+            "fieldName": "Comment",
+            "isEditable": true,
+            "visible": true
+          }
+        ],
+        "_editFlag": true,
+        "relationshipInfos": [],
+        "fieldValidations": {},
+        "fieldValues": {},
+        "attachmentValidations": {}
+      }
+    ],
+    "displayPromptOnSave": false,
+    "displayPromptOnDelete": false,
+    "removeOnSave": false,
+    "useFilterEditor": false,
+    "listenToGF": false,
+    "keepTemplateSelected": false,
+    "editGeometryDefault": false,
+    "autoSaveEdits": false,
+    "presetInfos": {},
+    "displayShapeSelector": false,
+    "displayPresetTop": false,
+    "enableAttributeUpdates": false,
+    "enableAutomaticAttributeUpdates": false,
+    "enableLockingMapNavigation": false,
+    "enableMovingSelectedFeatureToGPS": false,
+    "enableMovingSelectedFeatureToXY": false,
+    "showActionButtonsAbove": false,
+    "editDescription": "<div style='margin: 0px; padding: 0px; color: rgb(0, 0, 0); text-transform: none; text-indent: 0px; letter-spacing: normal; font-family: \"Avenir Light\", Verdana, Geneva, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; word-spacing: 0px; white-space: normal; box-sizing: border-box; orphans: 2; widows: 2; background-color: rgb(255, 255, 255); text-decoration-color: initial; font-variant-ligatures: normal; font-variant-caps: normal; -webkit-text-stroke-width: 0px; text-decoration-style: initial;' data-dojo-attach-point=\"templateTitle\"><p style=\"margin: 0px; padding: 0px; line-height: 1.5em; font-size: 1em; box-sizing: border-box;\"><strong style=\"box-sizing: border-box;\">Instructions:</strong><span class=\"ieFormatBreakerSpan\" style=\"box-sizing: border-box;\"></span></p><ol style=\"box-sizing: border-box;\"><li style=\"margin: 0px; padding: 0px; line-height: 1.5em; font-size: 1em; box-sizing: border-box;\"><span class=\"ieFormatBreakerSpan\" style=\"box-sizing: border-box;\">Select 'New Feature' pin below. If pin not visible, turn on Public Comments&nbsp;under Layer List.</span></li><li style=\"margin: 0px; padding: 0px; line-height: 1.5em; font-size: 1em; box-sizing: border-box;\"><span class=\"ieFormatBreakerSpan\" style=\"box-sizing: border-box;\">Click location on map for comment.</span></li><li style=\"margin: 0px; padding: 0px; line-height: 1.5em; font-size: 1em; box-sizing: border-box;\"><span class=\"ieFormatBreakerSpan\" style=\"box-sizing: border-box;\">Complete form and click 'Save'.</span></li></ol><p style=\"margin: 0px; padding: 0px; line-height: 1.5em; font-size: 1em; box-sizing: border-box;\"><span class=\"ieFormatBreakerSpan\" style=\"box-sizing: border-box;\"><em style=\"box-sizing: border-box;\">Please keep comments civil and pertinent to the land use designation and zoning review.</em></span></p></div><br class=\"Apple-interchange-newline\">"
+  },
+  "geocoderSettings": {
+    "url": "https://gis.cityoftacoma.org/arcgis/rest/services/Locators/AddressStreetParcel/GeocodeServer",
+    "fields": [
+      {
+        "name": "Loc_name",
+        "type": "esriFieldTypeString",
+        "alias": "Loc_name",
+        "required": false,
+        "length": 14
+      },
+      {
+        "name": "Shape",
+        "type": "esriFieldTypeGeometry",
+        "alias": "Shape",
+        "required": false
+      },
+      {
+        "name": "Score",
+        "type": "esriFieldTypeDouble",
+        "alias": "Score",
+        "required": false
+      },
+      {
+        "name": "Match_addr",
+        "type": "esriFieldTypeString",
+        "alias": "Match_addr",
+        "required": false,
+        "length": 120
+      },
+      {
+        "name": "Descr",
+        "type": "esriFieldTypeString",
+        "alias": "Description",
+        "required": false,
+        "length": 200
+      },
+      {
+        "name": "PlaceName",
+        "type": "esriFieldTypeString",
+        "alias": "PlaceName",
+        "required": false,
+        "length": 120
+      },
+      {
+        "name": "StAddr",
+        "type": "esriFieldTypeString",
+        "alias": "StAddr",
+        "required": false,
+        "length": 120
+      },
+      {
+        "name": "Place_addr",
+        "type": "esriFieldTypeString",
+        "alias": "Place_addr",
+        "required": false,
+        "length": 200
+      },
+      {
+        "name": "Nbrhd",
+        "type": "esriFieldTypeString",
+        "alias": "Neighborhood",
+        "required": false,
+        "length": 50
+      },
+      {
+        "name": "City",
+        "type": "esriFieldTypeString",
+        "alias": "City",
+        "required": false,
+        "length": 70
+      },
+      {
+        "name": "County",
+        "type": "esriFieldTypeString",
+        "alias": "County",
+        "required": false,
+        "length": 90
+      },
+      {
+        "name": "State",
+        "type": "esriFieldTypeString",
+        "alias": "State",
+        "required": false,
+        "length": 100
+      },
+      {
+        "name": "StateAbbr",
+        "type": "esriFieldTypeString",
+        "alias": "StateAbbr",
+        "required": false,
+        "length": 100
+      },
+      {
+        "name": "Country",
+        "type": "esriFieldTypeString",
+        "alias": "Country",
+        "required": false,
+        "length": 10
+      },
+      {
+        "name": "LangCode",
+        "type": "esriFieldTypeString",
+        "alias": "LangCode",
+        "required": false,
+        "length": 3
+      },
+      {
+        "name": "Phone",
+        "type": "esriFieldTypeString",
+        "alias": "Phone",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "URL",
+        "type": "esriFieldTypeString",
+        "alias": "URL",
+        "required": false,
+        "length": 200
+      },
+      {
+        "name": "Distance",
+        "type": "esriFieldTypeDouble",
+        "alias": "Distance",
+        "required": false
+      },
+      {
+        "name": "Xmin",
+        "type": "esriFieldTypeDouble",
+        "alias": "Xmin",
+        "required": false
+      },
+      {
+        "name": "Xmax",
+        "type": "esriFieldTypeDouble",
+        "alias": "Xmax",
+        "required": false
+      },
+      {
+        "name": "Ymin",
+        "type": "esriFieldTypeDouble",
+        "alias": "Ymin",
+        "required": false
+      },
+      {
+        "name": "Ymax",
+        "type": "esriFieldTypeDouble",
+        "alias": "Ymax",
+        "required": false
+      },
+      {
+        "name": "Type",
+        "type": "esriFieldTypeString",
+        "alias": "Type",
+        "required": false,
+        "length": 120
+      },
+      {
+        "name": "Rank",
+        "type": "esriFieldTypeString",
+        "alias": "Rank",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "Addr_type",
+        "type": "esriFieldTypeString",
+        "alias": "Addr_type",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "AddNum",
+        "type": "esriFieldTypeString",
+        "alias": "AddNum",
+        "required": false,
+        "length": 12
+      },
+      {
+        "name": "AddNumFrom",
+        "type": "esriFieldTypeString",
+        "alias": "AddNumFrom",
+        "required": false,
+        "length": 10
+      },
+      {
+        "name": "AddNumTo",
+        "type": "esriFieldTypeString",
+        "alias": "AddNumTo",
+        "required": false,
+        "length": 10
+      },
+      {
+        "name": "Side",
+        "type": "esriFieldTypeString",
+        "alias": "Side",
+        "required": false,
+        "length": 1
+      },
+      {
+        "name": "StPreDir",
+        "type": "esriFieldTypeString",
+        "alias": "StPreDir",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "StPreType",
+        "type": "esriFieldTypeString",
+        "alias": "StPreType",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "StName",
+        "type": "esriFieldTypeString",
+        "alias": "StName",
+        "required": false,
+        "length": 70
+      },
+      {
+        "name": "StType",
+        "type": "esriFieldTypeString",
+        "alias": "StType",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "StDir",
+        "type": "esriFieldTypeString",
+        "alias": "StDir",
+        "required": false,
+        "length": 20
+      },
+      {
+        "name": "ZIP",
+        "type": "esriFieldTypeString",
+        "alias": "ZIP",
+        "required": false,
+        "length": 10
+      },
+      {
+        "name": "DisplayX",
+        "type": "esriFieldTypeDouble",
+        "alias": "DisplayX",
+        "required": false
+      },
+      {
+        "name": "DisplayY",
+        "type": "esriFieldTypeDouble",
+        "alias": "DisplayY",
+        "required": false
+      }
+    ]
+  }
+}
