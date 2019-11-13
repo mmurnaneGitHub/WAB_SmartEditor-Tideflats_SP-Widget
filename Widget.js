@@ -33,6 +33,7 @@ define([
   'dojo/dom-class',
   'dojo/dom-style',
   'dojo/on',
+  'dojo/keys',
   'dojo/json',
   'dojo/topic',
   'dijit/_WidgetsInTemplateMixin',
@@ -61,10 +62,11 @@ define([
   "./PresetAllFields",
   "./utils",
   "./presetUtils",
+  "./presetBuilderBackwardCompatibility",
   "./smartAttributes",
   "./attributeInspectorTools",
   "./relatedTables",
-  "dijit/form/CheckBox",
+  "jimu/dijit/CheckBox",
   "dijit/form/Button",
   "dijit/form/DropDownButton",
   'dijit/DropDownMenu',
@@ -122,6 +124,7 @@ define([
     domClass,
     domStyle,
     on,
+    keys,
     JSON,
     topic,
     _WidgetsInTemplateMixin,
@@ -150,6 +153,7 @@ define([
     PresetAllFields,
     editUtils,
     presetUtils,
+    presetBuilderBackwardCompatibility,
     smartAttributes,
     attributeInspectorTools,
     relatedTables,
@@ -252,6 +256,7 @@ define([
       //}),
       postMixInProperties: function () {
         this.nls = lang.mixin(this.nls, window.jimuNls.common);
+        this.nls = lang.mixin(this.nls, window.jimuNls.timeUnit);
       },
 
       postCreate: function () {
@@ -270,34 +275,49 @@ define([
         this._selectTool = null;
         //wire up the button events
         this.own(on(this.cancelButton, "click", lang.hitch(this, function () {
-          //check if needs to display prompt fro unsaved edits
-          if (this.config.editor.displayPromptOnSave && this._validateFeatureChanged()) {
-            var isFirstPage = this._traversal.length > 1 ? false : true;
-            this._promptToResolvePendingEdit(isFirstPage, null, true).then(
-              lang.hitch(this, function (clickedButton) {
-                //if adding new related record the task of back button(_onCancelButtonClicked)
-                //should be processed after adding related record and showing list related records
-                //So process _onCancelButtonClicked only when action is 'no' & not adding related record
-                //if adding related record and clicked button is 'yes' then raise the flag of back button
-                //so that once related record is added after that _onCancelButtonClicked will be called
-                if (!this._addingNewRelatedRecord || clickedButton === "no") {
-                  this._onCancelButtonClicked();
-                } else {
-                  this._processBackButtonInNewRelatedRecord = true;
-                }
-              }), function () {
-              });
-          } else {
-            this._onCancelButtonClicked();
+          this._performCancelButtonOperation();
+        })));
+        //On keydown event show associated fields message in MessageBox(for clear button)
+        this.own(on(this.cancelButton, "keydown", lang.hitch(this, function (evt) {
+          if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+            this._performCancelButtonOperation();
           }
         })));
+        domAttr.set(registry.byId("savePresetValueSwitch").domNode, "aria-label", this.nls.usePresetValues);
+        domAttr.set(registry.byId("autoSaveSwitch").domNode, "aria-label", this.nls.autoSaveEdits);
+      },
+
+      _performCancelButtonOperation: function () {
+        //check if needs to display prompt for unsaved edits
+        if (this.config.editor.displayPromptOnSave && this._validateFeatureChanged()) {
+          var isFirstPage = this._traversal.length > 1 ? false : true;
+          this._promptToResolvePendingEdit(isFirstPage, null, true).then(
+            lang.hitch(this, function (clickedButton) {
+              //if adding new related record the task of back button(_onCancelButtonClicked)
+              //should be processed after adding related record and showing list related records
+              //So process _onCancelButtonClicked only when action is 'no' & not adding related record
+              //if adding related record and clicked button is 'yes' then raise the flag of back button
+              //so that once related record is added after that _onCancelButtonClicked will be called
+              if (!this._addingNewRelatedRecord || clickedButton === "no") {
+                this._onCancelButtonClicked();
+              } else {
+                this._processBackButtonInNewRelatedRecord = true;
+              }
+              this._setWidgetFirstFocusNode("templatePicker", true);
+            }), function () {
+            });
+        } else {
+          this._onCancelButtonClicked();
+        }
       },
 
       _setCancelButtonText: function () {
         if (this._traversal && this._traversal.length > 1) {
           domAttr.set(this.cancelButton, "innerHTML", this.nls.back);
+          domAttr.set(this.cancelButton, "aria-label", this.nls.back);
         } else {
           domAttr.set(this.cancelButton, "innerHTML", this.nls.clearSelection);
+          domAttr.set(this.cancelButton, "aria-label", this.nls.clearSelection);
         }
       },
 
@@ -408,7 +428,11 @@ define([
                 //only when working with main layers feature and not on related features
                 if (this._traversal.length < 2 && this._editGeomSwitch.domNode) {
                   this._editGeomSwitch.set('checked', true);
+                  this._editGeomSwitch.check();
                 }
+              }
+              if (this._traversal.length >= 1) {
+                this._setWidgetFirstFocusNode("AI", true);
               }
               //Disable attachments editor for the layers which are not editable
               //add timeout as it is taking some time to load editor
@@ -430,7 +454,7 @@ define([
           if (this.attrInspector) {
             if (this.attrInspector._numFeatures === 0) {
               this._showTemplate(true);
-
+              this._setWidgetFirstFocusNode("templatePicker", true);
             }
           }
         }
@@ -543,12 +567,21 @@ define([
 
         this.widgetActiveIndicator = domConstruct.create("div", { "class": "widgetActive widgetIndicator" });
         parentDom.insertBefore(this.widgetActiveIndicator, parentDom.firstChild);
-        if (this.config.editor.editDescription === undefined || this.config.editor.editDescription === null) {
+        if (this.config.editor.editDescription === undefined || this.config.editor.editDescription === null ||
+          this.config.editor.editDescription === "<br>") {
           this.config.editor.editDescription = '';
           this.templateTitle.innerHTML = this.config.editor.editDescription;
+          domStyle.set(this.templateTitle, "display", "none");
+          domAttr.set(this.templateTitle, "tabindex", "-1");
         }
         else {
           this.templateTitle.innerHTML = entities.decode(this.config.editor.editDescription);
+          //set aria-label by using stripHTMl as description may contains html
+          domAttr.set(this.templateTitle, "aria-label",
+            utils.stripHTML(this.config.editor.editDescription));
+          //dispaly the description and set the tabindex to 0
+          domStyle.set(this.templateTitle, "display", "block");
+          domAttr.set(this.templateTitle, "tabindex", "0");
         }
 
         this._orignls = esriBundle.widgets.attachmentEditor.NLS_attachments;
@@ -667,17 +700,28 @@ define([
 
       _noPrivilegeHandler: function (message) {
         this.templateTitle.innerHTML = message;
+        //set aria-label by using stripHTMl as description may contains html
+        domAttr.set(this.templateTitle, "aria-label", message);
+        //dispaly the description and set the tabindex to 0
+        domStyle.set(this.templateTitle, "display", "block");
+        domAttr.set(this.templateTitle, "tabindex", "0");
         if (this.templatePicker) {
           dojo.style(this.templatePicker.domNode, "display", "none");
-          if (this.drawingTool) {
-            dojo.style(this.drawingTool.domNode, "display", "none");
-          }
           if (this._mapClick) {
 
             this._mapClick.remove();
             this._mapClick = null;
           }
         }
+        if (this.drawingTool) {
+          dojo.style(this.drawingTool.domNode, "display", "none");
+        }
+        if (this.presetFieldsTableDiv) {
+          dojo.style(this.presetFieldsTableDiv, "display", "none");
+        }
+        utils.initFirstFocusNode(this.domNode, this.templateTitle);
+        utils.initLastFocusNode(this.domNode, this.templateTitle);
+        utils.focusFirstFocusNode(this.domNode);
         this.map.setInfoWindowOnClick(true);
         this.shelter.hide();
       },
@@ -902,9 +946,15 @@ define([
 
           if (data.message.hasOwnProperty("fields") &&
             data.message.hasOwnProperty("values")) {
-            array.forEach(data.message.fields, function (field) {
-              this._setPresetValueValue(field, data.message.values[0]);
-            }, this);
+            //if groupName is available set preset values using it
+            //else for backward compatibility using field name set values for preset groups
+            if (data.message.hasOwnProperty("groupName")) {
+              this._setPresetValueValue(null, data.message.values[0], data.message.groupName);
+            } else {
+              array.forEach(data.message.fields, function (field) {
+                this._setPresetValueValue(field, data.message.values[0], null);
+              }, this);
+            }
           }
         }
       },
@@ -1149,7 +1199,7 @@ define([
 
       onOpen: function () {
         //MJM - toggle Summary button off to allow editing of raw web map data
-        if (document.getElementById("dijit__WidgetBase_1").className.search("jimu-state-selected")!=-1) {
+        if (document.getElementById("dijit__WidgetBase_1").className.search("jimu-state-selected") != -1) {
           document.getElementById("dijit__WidgetBase_1").click();  //simulate button click - summary button currently selected, turn off - this.appConfig.widgetOnScreen.widgets[5]
         }
 
@@ -1159,7 +1209,24 @@ define([
           this.widgetManager.activateWidget(this);
         }
         if (this.templatePicker) {
+          var templatePickerInstance;
           this.templatePicker.update();
+          templatePickerInstance = query(".esriTemplatePicker", this.domNode);
+          //Check display property of template picker and accordingly handle the preset dialog
+          //display
+          if (templatePickerInstance && templatePickerInstance[0]) {
+            if (domStyle.get(templatePickerInstance[0], "display") === "none") {
+              query(".presetFieldsTableDiv")[0].style.display = "none";
+            } else {
+              //Turn on the preset section only if preset is configured
+              if (this.config.hasOwnProperty("attributeActionGroups") &&
+                Object.keys(this.config.attributeActionGroups.Preset).length > 0) {
+                query(".presetFieldsTableDiv")[0].style.display = "block";
+              }
+            }
+            //Update the first and last focus node once the contents are shown/hidden
+            this._setWidgetFirstFocusNode("templatePicker", true);
+          }
         }
       },
 
@@ -1250,6 +1317,7 @@ define([
         this.fetchDataByName('GroupFilter');
         this.widgetManager.activateWidget(this);
         this._createOverDef.resolve();
+        this._setWidgetFirstFocusNode("templatePicker", true);
         //this.loaded_state.set("loaded", true);
         return true;
       },
@@ -1424,6 +1492,7 @@ define([
             setTimeout(lang.hitch(this, function () {
               if (this._traversal.length < 2) {
                 this._editGeomSwitch.set('checked', true);
+                this._editGeomSwitch.check();
               }
             }), 100);
           }
@@ -1444,7 +1513,7 @@ define([
               //override defaults by copied feature is true
               for (var attrKey in selectedFeaturesAttributes) {
                 if (!newAttributes.hasOwnProperty(attrKey) || newAttributes[attrKey] === null ||
-                this.config.editor.overrideDefaultsByCopiedFeature) {
+                  this.config.editor.overrideDefaultsByCopiedFeature) {
                   newAttributes[attrKey] = selectedFeaturesAttributes[attrKey];
                 }
               }
@@ -1606,7 +1675,10 @@ define([
             "objectIdField": layer.objectIdField,
             "globalIdField": layer.globalIdField,
             "typeIdField": layer.typeIdField,
-            "fields": fieldsproc,
+            "fields": array.map(fieldsproc, function (field) {
+              // this will properly serialize "description" property as string instead of object.
+              return field.toJson();
+            }),
             "types": layer.types,
             "templates": layer.templates,
             "capabilities": "Create,Delete,Query,Update,Uploads,Editing",
@@ -1749,6 +1821,7 @@ define([
               break;
           }
         }));
+        this._setWidgetFirstFocusNode("AI", false);
         return enableSaveButton;
       },
 
@@ -1774,6 +1847,46 @@ define([
             }
           }));
         }
+      },
+
+
+      _onUpdateAttachmentListAdd508Support: function () {
+        if (this.attrInspector && this.attrInspector._attachmentEditor) {
+          aspect.after(this.attrInspector._attachmentEditor, "_updateConnects",
+            lang.hitch(this, function () {
+              this._add508SupportToAttachmentsDeleteBtn();
+            }));
+        }
+      },
+
+      _add508SupportToAttachmentsDeleteBtn: function () {
+        //since aspect.after of _updateConnects gets called multiple time
+        //create a timer and execute the following function only once
+        if (this._support508ToDeleteButtonTimer) {
+          clearInterval(this._support508ToDeleteButtonTimer);
+        }
+        this._support508ToDeleteButtonTimer = setInterval(lang.hitch(this, function () {
+          clearInterval(this._support508ToDeleteButtonTimer);
+          if (this.attrInspector._attachmentEditor &&
+            this.attrInspector._attachmentEditor._attachmentList) {
+            array.forEach(this.attrInspector._attachmentEditor._attachmentList.childNodes,
+              lang.hitch(this, function (childNode) {
+                if (childNode.nodeName !== "#text") {
+                  var deleteButton = query(".deleteAttachment", childNode)[0];
+                  if (deleteButton) {
+                    domAttr.set(deleteButton, "role", "button");
+                    domAttr.set(deleteButton, "tabindex", "0");
+                    domAttr.set(deleteButton, "aria-label", this.nls.deleteAttachment);
+                    this.own(on(deleteButton, "keydown", lang.hitch(this, function (evt) {
+                      if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+                        deleteButton.click();
+                      }
+                    })));
+                  }
+                }
+              }));
+          }
+        }), 300);
       },
 
       _hasAddedAnyAttachments: function (node, isUploader) {
@@ -1823,6 +1936,9 @@ define([
         this._turnEditGeometryToggleOff();
         //Handle the action buttons visibility based on edit geometry switch
         setTimeout(lang.hitch(this, function () {
+          //visibility of following buttons is based on visibility of edit checkbox and it's state
+          //i.e. if 'Edit Geometry' checkbox is visbile and checked then only show these buttons
+          isVisible = isVisible && this._editGeomSwitch.checked;
           this._toggleAttributeButtonVisibility(isVisible);
           this._toggleLocateButtonVisibility(isVisible);
           this._toggleXYCoordinatesButtonVisibility(isVisible);
@@ -2238,6 +2354,7 @@ define([
           //  this.attrInspector = null;
 
         }
+
         //if related feature is selected, disable the foreign key field in attribute inspector
         if (fKeyField) {
           array.forEach(layerInfos[0].fieldInfos, lang.hitch(this, function (field) {
@@ -2246,6 +2363,25 @@ define([
             }
           }));
         }
+
+        //Show textArea instead of text boxes - fix for github ticket #248
+        if (this.config.editor.hasOwnProperty("canSwitchToMultilineInput") &&
+          this.config.editor.canSwitchToMultilineInput) {
+          //loop through all the laeyr infos and its fieldinfos
+          array.forEach(layerInfos, lang.hitch(this, function (layer) {
+            if (layer.fieldInfos) {
+              array.forEach(layer.fieldInfos, lang.hitch(this, function (field) {
+                if (field.type === "esriFieldTypeString" &&
+                  (!field.hasOwnProperty("stringFieldOption") ||
+                    field.stringFieldOption === "textbox") &&
+                  this.config.editor.maxLimitToMultilineTextBox < field.length) {
+                  field.stringFieldOption = "textarea";
+                }
+              }));
+            }
+          }));
+        }
+
         this.attrInspector = editUtils.ATI({//new AttributeInspector({
           layerInfos: layerInfos
         }, html.create("div", {
@@ -2255,6 +2391,8 @@ define([
           }
         }));
         this.attrInspector.startup();
+        //after creating attachment list handle 508 support to delete attachment buttons
+        this._onUpdateAttachmentListAdd508Support();
         domConstruct.place(this.attrInspector.navMessage, this.attrInspector.nextFeatureButton.domNode, "before");
         //perform any edit geom switch functionality
         //only when working with main layers feature and not on related features
@@ -2265,14 +2403,19 @@ define([
           this._editGeomSwitch = new CheckBox({
             id: "editGeometrySwitch_" + this.attrInspector.id,
             checked: false,
-            value: this.nls.editGeometry
+            value: this.nls.editGeometry,
+            tabindex: 0, // code for accessibility
+            label: this.nls.editGeometry
           }, null);
+
+          domAttr.set(registry.byId("editGeometrySwitch_" + this.attrInspector.id).domNode,
+            "aria-label", this.nls.editGeometry);
 
           this.editSwitchDiv.appendChild(this._editGeomSwitch.domNode);
 
-          domConstruct.place(lang.replace(
+          /* domConstruct.place(lang.replace(
             "<label for='editGeometrySwitch_'" + this.attrInspector.id + ">{replace}</label></br></br>",
-            { replace: this.nls.editGeometry }), this._editGeomSwitch.domNode, "after");
+            { replace: this.nls.editGeometry }), this._editGeomSwitch.domNode, "after"); */
 
           domConstruct.place(this.editSwitchDiv, this.attrInspector.deleteBtn.domNode, "before");
 
@@ -2281,8 +2424,11 @@ define([
 
           // to create container for custom coordinates
           this._xyCoordinates = domConstruct.create("div", {
-            "class": "esriCTXYCoordinates esriCTGeometryEditor hidden",
-            "title": this.nls.moveSelectedFeatureToXY
+            "class": "esriCTActionButtons esriCTCustomButtons esriCTXYCoordinates esriCTGeometryEditor hidden",
+            "title": this.nls.moveSelectedFeatureToXY,
+            "tabindex": 0, // code for accessibility
+            "role": "button",
+            "aria-label": this.nls.moveSelectedFeatureToXY
           }, this.attrInspector.deleteBtn.domNode, "after");
 
           this.own(on(this._xyCoordinates, 'click', lang.hitch(this,
@@ -2290,11 +2436,23 @@ define([
               this._createCoordinatesPopup();
             })));
 
+          this.own(on(this._xyCoordinates, 'keydown',
+            lang.hitch(this, function (evt) {
+              if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+                this._createCoordinatesPopup();
+              }
+            })));
+
+
+
           // to create container for locate button
           // esriCTGeometryEditor is a common css class, that deals with margin values
           this._locateButtonDiv = domConstruct.create("div", {
-            "class": "esriCTLocateButtonContainer esriCTGeometryEditor hidden",
-            "title": this.nls.moveSelectedFeatureToGPS
+            "class": "esriCTActionButtons esriCTCustomButtons esriCTLocateButtonContainer esriCTGeometryEditor hidden",
+            "title": this.nls.moveSelectedFeatureToGPS,
+            "tabindex": 0,
+            "role": "button",
+            "aria-label": this.nls.moveSelectedFeatureToGPS
           }, this.attrInspector.deleteBtn.domNode, "after");
           // current location button object
           this._locateButton = new LocateButton({
@@ -2308,6 +2466,13 @@ define([
           if (canShowLocateButton === "none") {
             domStyle.set(this._locateButtonDiv, 'display', canShowLocateButton);
           }
+          // to get the current location when keydown on locate button
+          this.own(on(this._locateButtonDiv, 'keydown',
+            lang.hitch(this, function (evt) {
+              if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+                this._locateButton.locate();
+              }
+            })));
           // to get the current location when clicked on locate button
           this.own(on(this._locateButton, 'locate', lang.hitch(this, function (currentLocation) {
             // display error if fetching current location fails
@@ -2326,7 +2491,6 @@ define([
               }
             }
           })));
-
           // on click of locate button container, execute locate function
           this.own(on(this._locateButtonDiv, 'click', lang.hitch(this, function () {
             // locate current position on click of its container
@@ -2335,11 +2499,22 @@ define([
 
           // to create container for map navigation icon
           this._mapNavigation = domConstruct.create("div", {
-            "class": "esriCTMapNavigationLocked esriCTGeometryEditor hidden",
-            "title": this.nls.mapNavigationLocked
+            "class": "esriCTActionButtons esriCTCustomButtons esriCTMapNavigationLocked esriCTGeometryEditor hidden",
+            "title": this.nls.mapNavigationLocked,
+            "tabindex": 0,
+            "role": "button",
+            "aria-label": this.nls.mapNavigationLocked
           }, this.attrInspector.deleteBtn.domNode, "after");
+
           this.own(on(this._mapNavigation, 'click',
             lang.hitch(this, this._toggleMapNavigationButtonState)));
+
+          this.own(on(this._mapNavigation, 'keydown',
+            lang.hitch(this, function (evt) {
+              if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+                this._toggleMapNavigationButtonState();
+              }
+            })));
 
           // Button to refresh attributes on geometry change
           if (this.config.editor.enableAttributeUpdates) {
@@ -2351,8 +2526,12 @@ define([
             refreshButtonTitle = this.nls.automaticAttributeUpdatesOn;
           }
           this._refreshButton = domConstruct.create("div", {
-            "class": refreshButtonClass + " " + "esriCTGeometryEditor hidden",
-            "title": refreshButtonTitle
+            "class": refreshButtonClass + " " + "esriCTActionButtons esriCTCustomButtons esriCTGeometryEditor hidden",
+            "title": refreshButtonTitle,
+            "tabindex": 0, // code for accessibilty
+            "role": "button",
+            "aria-label": refreshButtonTitle
+
           }, this.attrInspector.deleteBtn.domNode, "after");
           this.own(on(this._refreshButton, 'click', lang.hitch(this, function () {
             if (this.config.editor.enableAutomaticAttributeUpdates) {
@@ -2361,11 +2540,21 @@ define([
               this._refreshAttributes();
             }
           })));
+          this.own(on(this._refreshButton, 'keydown',
+            lang.hitch(this, function (evt) {
+              if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+                if (this.config.editor.enableAutomaticAttributeUpdates) {
+                  this._toggleAttributeButtonState();
+                } else {
+                  this._refreshAttributes();
+                }
+              }
+            })));
         }
         // save button
         domConstruct.create("div", {
           innerHTML: this.nls.save,
-          "class": "saveButton jimu-btn jimu-state-disabled",
+          "class": "esriCTCustomButtons saveButton jimu-btn jimu-state-disabled",
           "style": "visibility: hidden"
         }, this.attrInspector.deleteBtn.domNode, "after");
 
@@ -2379,7 +2568,10 @@ define([
         // save button
         var saveButton = domConstruct.create("div", {
           innerHTML: this.nls.save,
-          "class": "saveButton jimu-btn jimu-state-disabled"
+          "class": "esriCTCustomButtons saveButton jimu-btn jimu-state-disabled",
+          "tabindex": "-1",
+          "role": "button",
+          "aria-label": this.nls.save
         }, this.buttonHeader, "last");
 
         //Hide Attribute inspector's delete button
@@ -2392,23 +2584,20 @@ define([
         if (query(".deleteButton", this.buttonHeader).length < 1) {
           var deleteButton = domConstruct.create("div", {
             innerHTML: this.nls.deleteText,
+            "tabindex": "-1",
+            "role": "button",
+            "aria-label": this.nls.deleteText,
             "class": "deleteButton jimu-btn jimu-btn-vacation"
           }, saveButton, "before");
           // query(".jimu-widget-smartEditor .topButtonsRowDiv")[0], "first");
 
           on(deleteButton, "click", lang.hitch(this, function () {
-            //if (this.currentFeature) {
-            if (this.map.infoWindow.isShowing) {
-              this.map.infoWindow.hide();
+            this._onDeleteButtonClick();
+          }));
+          on(deleteButton, "keydown", lang.hitch(this, function (evt) {
+            if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+              this._onDeleteButtonClick();
             }
-
-            if (this.config.editor.displayPromptOnDelete) {
-              this._promptToDelete();
-
-            } else {
-              this._deleteFeature();
-            }
-            //}
           }));
         }
 
@@ -2432,6 +2621,21 @@ define([
           }
           this._saveEdit(this.currentFeature);
         })));
+
+        //handle keydown event for save button
+        this.own(on(saveButton, "keydown", lang.hitch(this, function (evt) {
+          if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+            if (!this._validateFeatureChanged()) {
+              this._resetEditingVariables();
+              return;
+            }
+            if (this.map.infoWindow.isShowing) {
+              this.map.infoWindow.hide();
+            }
+            this._saveEdit(this.currentFeature);
+          }
+        })));
+
         //Code to support selection updated from select widget
         //Listen for onLayerSelectionChange
         aspect.after(this.attrInspector, "onLayerSelectionChange",
@@ -2537,6 +2741,9 @@ define([
 
         this.attrInspector.attachmentsRequiredMsg = domConstruct.create("div", {
           "innerHTML": this.nls.attachmentsRequiredMsg,
+          "role": "presentation",
+          "aria-label": this.nls.attachmentsRequiredMsg.replace("(*)", ""),
+          "tabindex": "0",
           "style": "display:none;color:red;margin-top:5px"
         });
         if (layerInfos.length === 1) {
@@ -2549,7 +2756,8 @@ define([
                 {
                   'class': 'atiAttachmentEditor',
                   attachmentsRequiredMsg: this.attrInspector.attachmentsRequiredMsg,
-                  currentAction: this.currentAction
+                  currentAction: this.currentAction,
+                  deleteAttachmentText: this.nls.deleteAttachment
                 },
                 attachNode);
               this.attrInspector._attachmentUploader.startup();
@@ -2578,7 +2786,28 @@ define([
         if (featureCreated) {
           this._processRelationAndShowAttrInspector(false, null, layer, null, null, true);
         }
+        setTimeout(lang.hitch(this, function () {
+          if (this.config.editor.removeOnSave && this.attrInspector._numFeatures === 0) {
+            this._setWidgetFirstFocusNode("templatePicker", true);
+          } else {
+            this._setWidgetFirstFocusNode("AI", true);
+          }
+        }), 1000);
       },
+
+      _onDeleteButtonClick: function () {
+        if (this.map.infoWindow.isShowing) {
+          this.map.infoWindow.hide();
+        }
+
+        if (this.config.editor.displayPromptOnDelete) {
+          this._promptToDelete();
+
+        } else {
+          this._deleteFeature();
+        }
+      },
+
 
       _processNextButtonClicked: function (processRelations, evt, layer, def, feature) {
         this._processRelationAndShowAttrInspector(processRelations, evt, layer, def, feature, false);
@@ -2594,8 +2823,10 @@ define([
           deleteButton = deleteButton[0];
           if (show === true) {
             deleteButton.style.display = "block";
+            domAttr.set(deleteButton, "tabindex", "0");
           } else {
             deleteButton.style.display = "none";
+            domAttr.set(deleteButton, "tabindex", "-1");
           }
         }
       },
@@ -2951,9 +3182,16 @@ define([
             showTooltip: false
           }, this.templatePickerNode);
           this.templatePicker.startup();
-
-          //this.templatePicker.domNode.appendChild(this.widgetActiveIndicator);
-          //this.templatePickerNode.appendChild(this.templatePicker.domNode);
+          domAttr.set(this.templatePicker.domNode, "tabindex", "-1");
+          aspect.after(this.templatePicker, "update", lang.hitch(this, function () {
+            //as soon as update is called, some checkboc node is getting active in template picker
+            //hence call this function to remove those checkbox from flow
+            this._handle508AccessibilityForTemplatePicker();
+            //also after update is called after some time new nodes are added also remove them from flow
+            setTimeout(lang.hitch(this, function () {
+              this._handle508AccessibilityForTemplatePicker();
+            }), 2000);
+          }));
           this._addFilterEditor(layers);
           // wire up events
 
@@ -3061,7 +3299,40 @@ define([
           this._isPresetTableCreated = true;
           this._createPresetTable(this.config.editor.configInfos);
         }
+        //After template picker is created after some time
+        //new nodes are added so remove them from flow
+        setTimeout(lang.hitch(this, function () {
+          this._handle508AccessibilityForTemplatePicker();
+        }), 2000);
       },
+
+      /**
+    * Code to handle the 508 accessibility features in template picker
+    * @memberOf widgets/CostAnalysis/Widget
+    */
+      _handle508AccessibilityForTemplatePicker: function () {
+        var templatePickerGrid, checkBoxNodes, gridLastFocusNode;
+        templatePickerGrid = query("div[role='grid']", this.templatePickerDiv);
+        checkBoxNodes = query("[type='checkbox']", this.templatePickerDiv);
+        gridLastFocusNode = query("[dojoattachpoint='lastFocusNode']",
+          this.templatePickerDiv);
+        //Check for all the elements before changing the tab indexes to "-1"
+        if (templatePickerGrid && templatePickerGrid[0]) {
+          domAttr.set(templatePickerGrid[0], "tabindex", "-1");
+        }
+        array.forEach(checkBoxNodes, lang.hitch(this, function (node) {
+          domAttr.set(node, "tabindex", "-1");
+        }));
+        //Change the tab index of grid's last focus node to "-1"
+        if (gridLastFocusNode && gridLastFocusNode[0]) {
+          domAttr.set(gridLastFocusNode[0], "tabindex", "-1");
+        }
+        var gridMsg = query(".dojoxGridMasterMessages", this.domNode);
+        if (gridMsg && gridMsg.length > 0) {
+          domAttr.set(gridMsg[0], "tabindex", "-1");
+        }
+      },
+
       isGuid: function (value) {
         if (value[0] === "{") {
           value = value.substring(1, value.length - 1);
@@ -3080,22 +3351,18 @@ define([
         return this.isGuid(value);
       },
       _createPresetTable: function (layerInfos) {
-        var isAnyFieldShownInPresetTable = false;
         //to support backward compatibility
         //if canPresetValue flag is present and it is set to true update the layer infos accordingly
         this._processConfigForBackwardPresetInfos(layerInfos);
-        // set preset values table
-        if (this.config.editor.hasOwnProperty("presetInfos") &&
-          Object.keys(this.config.editor.presetInfos).length > 0) {
-          this._initPresetFieldsTable();
-          isAnyFieldShownInPresetTable = this._fillPresetValueTable(layerInfos);
-          if (isAnyFieldShownInPresetTable) {
+        if (this.config.hasOwnProperty("attributeActionGroups") &&
+          Object.keys(this.config.attributeActionGroups.Preset).length > 0) {
+          // set preset values table
+          this._initPresetFieldsTable(layerInfos);
+          if (this.templatePicker) {
             query(".presetFieldsTableDiv")[0].style.display = "block";
           } else {
             query(".presetFieldsTableDiv")[0].style.display = "none";
           }
-        } else {
-          query(".presetFieldsTableDiv")[0].style.display = "none";
         }
       },
 
@@ -3130,6 +3397,9 @@ define([
           }));
           this.config.editor.presetInfos = configuredPresetInfos;
         }
+        //Backward compatibility for the apps configured before 2.14 WAB
+        //Update the preset based on fields to Preset Builder Groups
+        presetBuilderBackwardCompatibility.createPresetGroups(this.config, this._jimuLayerInfos);
       },
 
       _presetChange: function () {
@@ -3224,8 +3494,10 @@ define([
                   //& when showing related tables/layers details go back to parent features details
                   if (this._traversal.length < 2) {
                     this._showTemplate(true);
+                    this._setWidgetFirstFocusNode("templatePicker", true)
                   } else {
                     on.emit(this.cancelButton, 'click', { cancelable: true, bubbles: true });
+                    this._setWidgetFirstFocusNode("AI", true)
                   }
                 }
               }
@@ -3312,6 +3584,7 @@ define([
         this._toggleLocateButtonVisibility(checked);
         this._toggleXYCoordinatesButtonVisibility(checked);
         this._toggleMapNavigationButtonVisibility(checked);
+        this._setWidgetFirstFocusNode("AI", false);
       },
 
       /**
@@ -3432,11 +3705,16 @@ define([
         if (enable) {
           if (domClass.contains(saveBtn, "jimu-state-disabled")) {
             domClass.remove(saveBtn, "jimu-state-disabled");
+            domAttr.set(saveBtn, "tabindex", "0");
           }
           isSaveButtonEnable = true;
+          domAttr.set(saveBtn, "tabindex", "0");
+          this._setWidgetFirstFocusNode("AI", false);
         } else {
           if (!domClass.contains(saveBtn, "jimu-state-disabled")) {
             domClass.add(saveBtn, "jimu-state-disabled");
+            domAttr.set(saveBtn, "tabindex", "-1");
+            this._setWidgetFirstFocusNode("AI", false);
           }
         }
         //Update the save buttons state in its respective related table info
@@ -3505,83 +3783,34 @@ define([
         }
       },
 
-      _fillPresetValueTable: function (editLayerInfos) {
-        var addedAnyField = false;
+      _initPresetFieldsTable: function (editLayerInfos) {
+        var presetValueTableNode = domConstruct.create("div", {
+          "class": "ee-presetValueTableDiv templatePicker"
+        }, this.presetFieldsTableNode);
+        var bodyDiv = domConstruct.create("div", { "class": "bodyDiv" }, presetValueTableNode);
+        var bodyTable = domConstruct.create("table", { "class": "ee-presetValueBodyTable" }, bodyDiv);
+
+        var presetValueTable = domConstruct.create("tbody", {
+          "class": "ee-presetValueBody", "id": "eePresetValueBody"
+        }, bodyTable, "first");
+
         var presetAllFields = new PresetAllFields({
           nls: this.nls,
+          parentNode: presetValueTable,
           configInfos: editLayerInfos,
           _jimuLayerInfos: this._jimuLayerInfos,
-          _configuredPresetInfos: this.config.editor.presetInfos,
+          _configuredPresetInfos: this.config.attributeActionGroups.Preset,
           showingInWidget: true
         });
-
-        this._presetFieldInfos = presetAllFields.presetFieldInfos;
-
-        var presetValueTable = query("#eePresetValueBody")[0];
-        // fill the table
-        for (var fieldName in this._presetFieldInfos) {
-          var presetFieldInfo = this._presetFieldInfos[fieldName];
-          if (presetFieldInfo.hasOwnProperty('type') &&
-            presetFieldInfo.type !== "esriFieldTypeGeometry" &&
-            presetFieldInfo.type !== "esriFieldTypeOID" &&
-            presetFieldInfo.type !== "esriFieldTypeBlob" &&
-            presetFieldInfo.type !== "esriFieldTypeGlobalID" &&
-            presetFieldInfo.type !== "esriFieldTypeRaster" &&
-            presetFieldInfo.type !== "esriFieldTypeXML") {
-
-            var row = domConstruct.create("tr");
-            var label = domConstruct.create("td", { "class": "ee-atiLabel" });
-            label.innerHTML = lang.replace('{fieldAlias}',
-              {
-                fieldAlias: presetFieldInfo.label
-              });
-
-            domConstruct.place(label, row);
-
-            var valueColumnNode = domConstruct.create("td",
-              { "class": "preset-value-editable" }, row);
-
-            var presetValueNodes = presetUtils.createPresetFieldContentNode(presetFieldInfo);
-            var dateWidget = null;
-            var timeWidget = null;
-            for (var index = 0; index < presetValueNodes.length; index++) {
-              var presetValueNode = presetValueNodes[index];
-              var fieldValues;
-              this.own(on(presetValueNode, 'change', lang.hitch(this, this._presetChange)));
-              if (presetValueNode.declaredClass === "dijit.form.DateTextBox") {
-                dateWidget = presetValueNode;
-              }
-              if (presetValueNode.declaredClass === "dijit.form.TimeTextBox") {
-                timeWidget = presetValueNode;
-              }
-              domConstruct.place(presetValueNode.domNode, valueColumnNode, "last");
-              //get configured field values and set them to dijits
-              if (this.config.editor.presetInfos && this.config.editor.presetInfos[fieldName]) {
-                fieldValues = this.config.editor.presetInfos[fieldName];
-              }
-
-              if (fieldValues && fieldValues.length > 0) {
-                /**
-                * After updating the preset approach and removed configure values from preset popup,
-                * we will now always store only one value.
-                * so in case of dates with multiple nodes for date and time use 0th index value only.
-                */
-                var value = fieldValues[0];
-                if (presetValueNode.declaredClass === "dijit.form.DateTextBox" ||
-                  presetValueNode.declaredClass === "dijit.form.TimeTextBox") {
-                  value = (value === "" || value === null) ? null : new Date(value);
-                }
-                presetValueNode.set('value', value);
-              }
-            }
-            if (dateWidget !== null) {
-              this.own(on(label, 'click', lang.hitch(this, this._dateClick(dateWidget, timeWidget))));
-            }
-            presetValueTable.appendChild(row);
-            addedAnyField = true;
-          }
+        this.own(on(presetAllFields, "presetValueChanged", lang.hitch(this, this._presetChange)));
+        //Hide Preset form borders when all groups are set to hide in display
+        if (!presetAllFields.hasAtLeastOneGroupInDisplay) {
+          domClass.add(presetValueTableNode, "esriCTHidden");
         }
-        return addedAnyField;
+        //enable use preset value checkbox if any of the preset group has valid value
+        if (presetAllFields.enableUsePresetValueCheckBox) {
+          this._presetChange();
+        }
       },
 
       _dateClick: function (dateWidget, timeWidget) {
@@ -3738,48 +3967,67 @@ define([
 
       },
 
-      _initPresetFieldsTable: function () {
-        var presetValueTableNode = domConstruct.create("div", { "class": "ee-presetValueTableDiv templatePicker" },
-          this.presetFieldsTableNode);
-
-        var bodyDiv = domConstruct.create("div", { "class": "bodyDiv" }, presetValueTableNode);
-        var bodyTable = domConstruct.create("table",
-          { "class": "ee-presetValueBodyTable" }, bodyDiv);
-
-        domConstruct.create("tbody", { "class": "ee-presetValueBody", "id": "eePresetValueBody" },
-          bodyTable, "first");
-      },
-
-      _setPresetValueValue: function (fieldName, value) {
+      _setPresetValueValue: function (fieldName, value, groupName) {
+        var createGroupName = true;
         var presetValueTable = query("#eePresetValueBody")[0];
+        if (groupName) {
+          createGroupName = false;
+        }
         if (presetValueTable) {
           var inputElements = query(".preset-value-editable .ee-inputField");
           array.forEach(inputElements, lang.hitch(this, function (ele) {
-
-            if (!domClass.contains(ele, "dijitTimeTextBox")) {
-              var elem = dijit.byNode(ele);
-              if (elem !== undefined && elem !== null) {
-                if (elem.get("name") === fieldName) {
+            var elem = dijit.byNode(ele);
+            if (elem !== undefined && elem !== null) {
+              //Get element namd and dategroup info
+              var elementName = elem.get("name");
+              var isDateGroup = elem.get("isdategroup");
+              var spaceSeperatedGroupName;
+              //For backward compatibility, create group name using fieldName
+              //for e.g Prest gorup will have groupName 'Name (name)'
+              //in this only match field name in brackets
+              if (createGroupName) {
+                spaceSeperatedGroupName = elementName.split(" ");
+                if (spaceSeperatedGroupName.length > 1) {
+                  elementName = spaceSeperatedGroupName[1];
+                  groupName = "(" + fieldName + ")";
+                }
+              }
+              //If group name is valid and it matches elements name then set the value
+              if (groupName && elementName.toLowerCase() === groupName.toLowerCase()) {
+                //In case of date groups create fixed date info
+                //else set the value directly
+                if (elem.esriCTisDateGroup) {
+                  var dateInfo = {
+                    "dateType": "fixed",
+                    "dateTime": new Date(value).getTime()
+                  }
+                  elem.esriCTPresetGroup.presetValue = dateInfo;
+                  //If valid date exist, show the same in preset group
+                  if (dateInfo.dateTime) {
+                    elem.set("value",
+                      presetUtils.getDateFromRelativeInfo(elem.esriCTPresetGroup.presetValue, true));
+                  } else {
+                    //Otherwise show the empty date
+                    elem.set("value", "");
+                  }
+                } else if (elem.esriCTDomainList) {
+                  array.some(elem.store.data, function (option) {
+                    if (option.id === value) {
+                      elem.set("value", value);
+                      return true;
+                    }
+                  });
+                } else {
                   elem.set("value", value);
                 }
-
               }
-              //else {
-              //  var element = query("input[type='hidden']", ele);
-              //  if (!element || element.length === 0) {
-              //    element = query("input", ele);
-              //  }
-              //  if (element[0].name === fieldName) {
-              //    element[0].value = value;
-              //  }
-              //}
             }
           }));
         }
       },
+
       _modifyAttributesWithPresetValues: function (attributes, newTempLayerInfos, copyAttrInfo, fKeyField) {
-        var presetValueTable = query("#eePresetValueBody")[0];
-        var presetFieldInfos = [], presetFields = [];
+        var presetFields = [], presetFieldsGroupName = {}, uniquePresetGroupNames = [];
         //if fieldValues exist means copy actions are applied
         if (newTempLayerInfos.fieldValues) {
           //loop through all copy actions and get the values as per priority for individual actions
@@ -3787,6 +4035,11 @@ define([
             for (var i = 0; i < newTempLayerInfos.fieldValues[fieldName].length; i++) {
               var copyAction = newTempLayerInfos.fieldValues[fieldName][i];
               var foundInIntersection = false;
+              var currentFieldInfo;
+              //get current feields info
+              if (newTempLayerInfos.fieldInfos) {
+                currentFieldInfo = presetUtils.getFieldInfoByFieldName(newTempLayerInfos.fieldInfos, fieldName);
+              }
               //get value form intersection if it is enabled
               if (copyAttrInfo && copyAction.actionName === "Intersection" && copyAction.enabled) {
                 for (var j = 0; j < copyAction.fields.length; j++) {
@@ -3817,6 +4070,11 @@ define([
                     copyAttrInfo.Coordinates[copyAction.coordinatesSystem].y;
                 } else {
                   attributes[fieldName] = copyAttrInfo.Coordinates[copyAction.coordinatesSystem][copyAction.field];
+                  //when x/y coordinates are used and control is changed to textarea, it is showing invalid in text area.
+                  //so convert value to string if the field type is string
+                  if (currentFieldInfo && currentFieldInfo.type === "esriFieldTypeString") {
+                    attributes[fieldName] = attributes[fieldName].toString();
+                  }
                 }
                 break;
               }
@@ -3825,62 +4083,64 @@ define([
               if (!fKeyField || fKeyField !== fieldName) {
                 if (copyAction.actionName === "Preset" && copyAction.enabled && this._usePresetValues) {
                   presetFields.push(fieldName);
+                  if (copyAction.attributeActionGroupName) {
+                    presetFieldsGroupName[fieldName] = copyAction.attributeActionGroupName;
+                    if (uniquePresetGroupNames.indexOf(copyAction.attributeActionGroupName) < 0) {
+                      uniquePresetGroupNames.push(copyAction.attributeActionGroupName);
+                    }
+                  }
                   break;
                 }
               }
             }
           }
-          //get fieldsInfos of only those fields which are configured for preset
-          presetFieldInfos = array.filter(newTempLayerInfos.fieldInfos, function (fieldInfo) {
-            return (presetFields.indexOf(fieldInfo.name) > -1);
-          });
         }
-        //if valid presetValueTable and preset is configured for some fields
+        //if preset is configured for some fields
         //then modify Attributes with preset values entered in the preset form
-        if (presetValueTable && presetFields.length > 0) {
-          var inputElements = query(".preset-value-editable .ee-inputField");
-          array.forEach(inputElements, lang.hitch(this, function (ele) {
-
-            var elem = dijit.byNode(ele);
-            var dateVal = null;
-            if (elem.declaredClass !== "dijit.form.TimeTextBox") {
-              var valToSet = elem.get("value");
-              if (valToSet !== undefined && valToSet !== null && valToSet !== "") {
-
-                if (elem.declaredClass === "dijit.form.DateTextBox") {
-                  var timeElement = query(".dijitTimeTextBox", ele.parentNode)[0];
-                  // retrieve the value
-                  dateVal = new Date(valToSet);
-                  if (dateVal.toString() !== "Invalid Date") {
-                    if (timeElement !== undefined && timeElement !== null) {
-                      var timVal = new Date(dijit.byNode(timeElement).get("value"));
-                      if (timVal.toString() !== "Invalid Date") {
-                        dateVal.setHours(timVal.getHours());
-                        dateVal.setMinutes(timVal.getMinutes());
-                        dateVal.setSeconds(timVal.getSeconds());
-                        valToSet = dateVal.getTime();
-                      }
-                    } else {
-                      valToSet = dateVal.getTime();
-                    }
-                  }
-                }
-                // set the attribute value
-                if (valToSet !== undefined && valToSet !== null && valToSet !== "") {
-                  for (var attribute in attributes) {
-                    if (attributes.hasOwnProperty(attribute) &&
-                      attribute === elem.get("name") &&
-                      presetFields.indexOf(elem.get("name")) >= 0) {
-                      attributes[attribute] = valToSet;
-                      break;
-                    }
-                  }
-                }
-
-              }
+        if (presetFields.length > 0) {
+          var valToSet = this._getPresetValueForGroup(uniquePresetGroupNames);
+          for (var attribute in attributes) {
+            if (attributes.hasOwnProperty(attribute) &&
+              presetFields.indexOf(attribute) >= 0 &&
+              presetFieldsGroupName.hasOwnProperty(attribute)) {
+              attributes[attribute] = valToSet[presetFieldsGroupName[attribute]];
             }
-          }));
+          }
         }
+      },
+
+      /**
+       * Returns object with groupName and its value
+       * @param {Array of group names for which values need to be fetched} groupNames
+       */
+      _getPresetValueForGroup: function (groupNames) {
+        var returnValue = {};
+        var configuredPresetGroups = this.config.attributeActionGroups.Preset;
+        for (var i = 0; i < groupNames.length; i++) {
+          //Check if preset group name exist
+          if (configuredPresetGroups.hasOwnProperty(groupNames[i])) {
+            var presetGroup = configuredPresetGroups[groupNames[i]];
+            if (!presetGroup.showOnlyDomainFields &&
+              (presetGroup.dataType === "esriFieldTypeString" ||
+                presetGroup.dataType === "esriFieldTypeInteger" ||
+                presetGroup.dataType === "esriFieldTypeGUID")) {
+              returnValue[groupNames[i]] = presetGroup.presetValue;
+            } else if (presetGroup.dataType === "esriFieldTypeDate" &&
+              !presetGroup.showOnlyDomainFields) {
+              //get date from relative info stored
+              var newFieldVal = presetUtils.getDateFromRelativeInfo(presetGroup.presetValue);
+              //get date in epoch format so that it can be saved in the layer
+              newFieldVal = (newFieldVal && newFieldVal.getTime) ?
+                newFieldVal.getTime() : (newFieldVal && newFieldVal.toGregorian ?
+                  newFieldVal.toGregorian().getTime() : newFieldVal);
+              //store new date value in object
+              returnValue[groupNames[i]] = newFieldVal;
+            } else if (presetGroup.selectedDomainValue) {
+              returnValue[groupNames[i]] = presetGroup.selectedDomainValue;
+            }
+          }
+        }
+        return returnValue;
       },
 
       // to add (*) to the label of required fields
@@ -4501,6 +4761,7 @@ define([
       _promptToResolvePendingEdit: function (switchToTemplate, evt, showClose, skipPostEvent) {
         skipPostEvent = skipPostEvent || false;
         var disable = !this._validateAttributes();
+        var tabindex = disable ? -1 : 0;
         var pendingEditsDef = new Deferred();
         var buttons = [{
           label: this.nls.yes,
@@ -4560,6 +4821,7 @@ define([
 
           })
         });
+        domAttr.set(dialog.disabledButtons[0], "tabindex", tabindex);
         return pendingEditsDef.promise;
       },
 
@@ -4748,6 +5010,7 @@ define([
                     setTimeout(lang.hitch(this, function () {
                       if (this._traversal.length < 2) {
                         this._editGeomSwitch.set('checked', true);
+                        this._editGeomSwitch.check();
                       }
                     }), 100);
                   }
@@ -4756,6 +5019,12 @@ define([
                 }
               }
               deferred.resolve("success");
+              if ((this.config.editor.removeOnSave && this.attrInspector._numFeatures === 0) ||
+                switchToTemplate) {
+                this._setWidgetFirstFocusNode("templatePicker", true);
+              } else {
+                this._setWidgetFirstFocusNode("AI", true);
+              }
             }
             array.forEach(processIndicators, function (processIndicator) {
               if (domClass.contains(processIndicator, "busy")) {
@@ -4846,6 +5115,7 @@ define([
                 (this.currentLayerInfo.featureLayer.hasM && !this.currentLayerInfo.featureLayer.allowUpdateWithoutMValues));
             }
             this._addWarning();
+            this._setWidgetFirstFocusNode("AI", true);
           }
           this._recordLoadeAttInspector();
         }
@@ -4895,7 +5165,10 @@ define([
           _url: this.currentLayerInfo.featureLayer.url
         };
         this._smartAttributes = new smartAttributes(smartAttParams);
-
+        this.own(on(this._smartAttributes, "onFieldToggle", lang.hitch(this,
+          function () {
+            this._add508SupportToAttachmentsDeleteBtn("AI");
+          })));
       },
       _showTemplatePicker: function () {
 
@@ -4971,7 +5244,14 @@ define([
       },
       _toggleUsePresetValues: function (checked) {
         var sw = registry.byId("savePresetValueSwitch");
-        sw.set('checked', checked === null ? !sw.checked : checked);
+        // sw.set('checked', checked === null ? !sw.checked : checked);
+        // code written to handle checkbox check as checkbox changed to jimu checkbox
+        if (checked) {
+          sw.check();
+        }
+        else {
+          sw.uncheck();
+        }
         this._usePresetValues = sw.checked;
       },
       _turnEditGeometryToggleOff: function () {
@@ -4989,6 +5269,7 @@ define([
           this._editingEnabled = false;
           this._ignoreEditGeometryToggle = true;
           this._editGeomSwitch.set("checked", false);
+          this._editGeomSwitch.uncheck();
           this.map.setInfoWindowOnClick(true);
           setTimeout(lang.hitch(this, function () {
             this._ignoreEditGeometryToggle = false;
@@ -5072,7 +5353,7 @@ define([
         /* MJM - don't need tip
         var additionStr = "<br/>" + "(" + this.nls.pressStr + "<b>" +
           this.nls.ctrlStr + "</b> " + this.nls.snapStr + ")";
-        */
+          */
         var additionStr = "";  //MJM
 
         this._defaultStartStr = esriBundle.toolbars.draw.start;
@@ -5249,7 +5530,8 @@ define([
             //perform any edit geom switch functionality
             //only when working with main layers feature and not on related features
             if (this._traversal.length < 2 && this._editGeomSwitch.domNode) {
-              this._editGeomSwitch.set('checked', true);
+              // code return to handle checkbox check as kimu checkbox added 
+              this._editGeomSwitch.check();
             }
           }), 100);
         } else {
@@ -5369,6 +5651,7 @@ define([
         this._createItemContent(itemContainer, isOpen, layerId);
         if (isTempFeature) {
           domClass.add(itemContainer, "esriCTDisableToggling");
+          domAttr.set(itemContainer.children[0], "tabindex", "-1");
         }
         itemListContainer.appendChild(itemContainer);
         return itemContainer;
@@ -5380,7 +5663,10 @@ define([
       _createItemTitle: function (title, itemContainer, isOpen, isTempFeature, layer) {
         var itemTitleContainer, itemTitle, arrowIcon, itemHighlighter;
         itemTitleContainer = domConstruct.create("div", {
-          "class": "esriCTItemTitleContainer"
+          "class": "esriCTItemTitleContainer",
+          "tabindex": "0",
+          "role": "button",
+          "aria-label": title
         }, itemContainer);
         //Item highlighter
         itemHighlighter = domConstruct.create("div", {
@@ -5392,6 +5678,9 @@ define([
           "innerHTML": title,
           "title": title
         }, itemTitleContainer);
+        if (title === this.nls.relatedItemTitle) {
+          domAttr.set(itemTitleContainer, "isRelatedItem", "true");
+        }
         //Add opacity to layer title based on layer's visibility
         if (this._traversal.length <= 1 && layer && !layer.visibleAtMapScale) {
           itemTitle.style.opacity = "0.3";
@@ -5410,6 +5699,13 @@ define([
             this._togglePanel(itemContainer);
           }
         })));
+        this.own(on(itemTitleContainer, "keydown", lang.hitch(this, function (evt) {
+          if (evt.keyCode === keys.ENTER || evt.keyCode === keys.SPACE) {
+            if (!domClass.contains(evt.currentTarget.parentElement, "esriCTDisableToggling") && !isTempFeature) {
+              this._togglePanel(itemContainer);
+            }
+          }
+        })));
       },
 
       /**
@@ -5422,17 +5718,19 @@ define([
           "class": "esriCTItemContent esriCTRelatedItemContent"
         }, itemContainer);
         if (isOpen) {
-          configuredLayerDesc = this._fetchLayerDescription(layerId);
+          configuredLayerDesc = entities.decode(this._fetchLayerDescription(layerId));
           if (configuredLayerDesc) {
             //show configured description
             editDescription = domConstruct.create("div", {
               "class": "editDescription",
-              "innerHTML": configuredLayerDesc
+              "innerHTML": configuredLayerDesc,
+              "role": "presentation",
+              "tabindex": "0",
+              "aria-label": utils.stripHTML(configuredLayerDesc)
             }, itemContent);
           }
           domConstruct.place(this.attrInspector.domNode, itemContent, "last");
           this._togglePanel(itemContainer);
-
         } else {
           if (this._relatedTablesInfo[this.attrInspector._currentFeature._layer.id] &&
             this._relatedTablesInfo[this.attrInspector._currentFeature._layer.id].domNode) {
@@ -5457,13 +5755,73 @@ define([
             domStyle.set(itemHighlighter, "backgroundColor", this.config.selectedThemeColor);
             //toggle arrow icon class
             domClass.replace(arrowIcon, "itemTitleUpArrow", "itemTitleDownArrow");
+            if (title.innerHTML === this.nls.relatedItemTitle) {
+              this._setTabIndexToListItems(node, true, "0");
+            } else {
+              this._setTabIndexToListItems(node, false, "0");
+            }
           } else {
             //set the item highlighter
             domStyle.set(itemHighlighter, "backgroundColor", "transparent");
             //toggle arrow icon class
             domClass.replace(arrowIcon, "itemTitleDownArrow", "itemTitleUpArrow");
+            if (title.innerHTML === this.nls.relatedItemTitle) {
+              this._setTabIndexToListItems(node, true, "-1");
+            } else {
+              this._setTabIndexToListItems(node, false, "-1");
+            }
           }
           domClass.toggle(panel, "esriCTItemContentActive");
+        }
+        this._setWidgetFirstFocusNode("AI", false);
+      },
+
+      _setTabIndexToListItems: function (node, isRelatedTable, tabindex) {
+        if (isRelatedTable) {
+          var realtedTableItems = query(".relatedTableFields", node);
+          array.forEach(realtedTableItems, lang.hitch(this, function (tableField) {
+            domAttr.set(tableField, "tabindex", tabindex);
+          }));
+        } else {
+          var widgets = registry.findWidgets(this.attrInspector.domNode);
+          array.forEach(widgets, lang.hitch(this, function (currentWidget) {
+            if (currentWidget.focusNode) {
+              domAttr.set(currentWidget.focusNode, "tabindex", tabindex);
+            }
+          }));
+          array.forEach(query(".esriCTCustomButtons", this.attrInspector.domNode),
+            lang.hitch(this, function (button) {
+              domAttr.set(button, "tabindex", tabindex);
+            }));
+          //Check if description is present
+          //If yes handle the tabindexes accordingly
+          var descriptionNode;
+          descriptionNode = query(".editDescription", this.attrInspector.domNode.parentElement);
+          if (descriptionNode && descriptionNode.length > 0) {
+            domAttr.set(descriptionNode[0], "tabindex", tabindex);
+          }
+          //Change the edit geometry switch tabindex
+          domAttr.set(this._editGeomSwitch.domNode, "tabindex", tabindex);
+          this._setTabIndexToAttachmentSection(tabindex);
+        }
+      },
+      _setTabIndexToAttachmentSection: function (tabindex) {
+        if (this.attrInspector._attachmentEditor) {
+          var attachmentNode, attachmentUploadForm;
+          attachmentNode = this.attrInspector._attachmentEditor._attachmentList;
+          attachmentUploadForm = this.attrInspector._attachmentEditor._uploadForm;
+          if (attachmentUploadForm && domStyle.get(attachmentUploadForm, "display") === "block") {
+            domAttr.set(attachmentUploadForm.children[0], "tabindex", tabindex);
+          }
+          if (attachmentNode && attachmentNode.childNodes.length > 0) {
+            array.forEach(attachmentNode.childNodes, lang.hitch(this,
+              function (childNode) {
+                if (childNode.nodeName !== "#text") {
+                  domAttr.set(childNode.children[0], "tabindex", tabindex);
+                  domAttr.set(childNode.children[1], "tabindex", tabindex);
+                }
+              }));
+          }
         }
       },
 
@@ -5475,6 +5833,7 @@ define([
         //remove layers expand/collapse arrow as it doesn't have any relation
         if (layerNode) {
           domClass.add(layerNode, "esriCTDisableToggling");
+          domAttr.set(query(".esriCTItemTitleContainer", layerNode)[0], "tabindex", "-1");
         }
       },
 
@@ -5507,6 +5866,9 @@ define([
         }
         if (currentConfig.editDescription) {
           configuredDesc = currentConfig.editDescription;
+        }
+        if (configuredDesc === "<br>") {
+          configuredDesc = "";
         }
         return configuredDesc;
       },
@@ -5870,6 +6232,7 @@ define([
             //Pass selected features to selectFeaturesToCopy method,
             //and allow user to choose among selctd features
             this._copyFeaturesObj.selectFeaturesToCopy(selectedFeatures);
+            this._setWidgetFirstFocusNode("copyFeatures", true);
             // After selecting feature, copy feature list is created.
             // Since this selection selects the features with default cyan color it needs to be removed or reset it.
             // Hence, as soon as user gets the selected feature remove its selection as list is created and selected features
@@ -6008,6 +6371,7 @@ define([
         this._changeSelectToolState();
         // destroy copy feature instance
         this._destroyCopyFeatureInstance();
+        this._setWidgetFirstFocusNode("templatePicker", true);
       },
 
       /**
@@ -6034,7 +6398,7 @@ define([
             //override defaults by copied feature is true
             for (var attrKey in selectedFeaturesAttributes) {
               if (!newAttributes.hasOwnProperty(attrKey) || newAttributes[attrKey] === null ||
-              this.config.editor.overrideDefaultsByCopiedFeature) {
+                this.config.editor.overrideDefaultsByCopiedFeature) {
                 newAttributes[attrKey] = selectedFeaturesAttributes[attrKey];
               }
             }
@@ -6369,6 +6733,385 @@ define([
           };
         }));
         return infoObj;
+      },
+
+      /**********************
+      * Code to support 508
+      **********************
+      */
+      _setWidgetFirstFocusNode: function (screen, isFocusRequired) {
+        var nodeObj = this._getFirstAndLastFocusNode(screen);
+        if (!nodeObj.firstNode || !nodeObj.lastNode) {
+          return;
+        }
+        utils.initFirstFocusNode(this.domNode, nodeObj.firstNode);
+        utils.initLastFocusNode(this.domNode, nodeObj.lastNode);
+        if (isFocusRequired) {
+          utils.focusFirstFocusNode(this.domNode);
+        }
+      },
+
+      _getFirstAndLastFocusNode: function (screen) {
+        var nodeObj = {};
+        if (screen === "templatePicker") {
+          nodeObj.firstNode = this._getFirstFocusNodeForTemplatePickerScreen();
+          nodeObj.lastNode = this._getLastFocusNodeForTemplatePickerScreen();
+        }
+        else if (screen === "AI") {
+          if (this.attrInspector && this.attrInspector.attributeTable) {
+            //Loop through all the attribute inspector fields and make sure all the disabled
+            //atrributes are repalced with read only attribtues
+            var node, listContainer, tabindexForControls;
+            node = registry.findWidgets(this.attrInspector.attributeTable);
+            if (this.attrInspector.domNode.parentElement &&
+              this.attrInspector.domNode.parentElement.parentElement) {
+              listContainer = query(".esriCTItemContent",
+                this.attrInspector.domNode.parentElement.parentElement);
+              if (listContainer && listContainer.length > 0) {
+                if (domClass.contains(listContainer[0], "esriCTItemContentActive")) {
+                  tabindexForControls = "0";
+                } else {
+                  tabindexForControls = "-1";
+                }
+              }
+              this._setTabIndexToListItems(null, false, tabindexForControls);
+            }
+            array.forEach(node, lang.hitch(this, function (node) {
+              if (node.focusNode && domAttr.get(node.focusNode, "disabled")) {
+                domAttr.set(node.focusNode, "disabled", false);
+                domAttr.set(node.focusNode, "readonly", true);
+              }
+              //Set aria-labels to all the controls
+              if (node.focusNode && node.domNode.parentElement &&
+                node.domNode.parentElement.parentElement) {
+                var label = query(".atiLabel", node.domNode.parentElement.parentElement);
+                if (label && label[0]) {
+                  var fieldLabel = label[0].innerHTML;
+                  //if field is required then skip the html text from being used in aria-label
+                  //and set aria-required property to true
+                  if (fieldLabel.indexOf('<a class="asteriskIndicator"> *</a>') >= 0) {
+                    fieldLabel = fieldLabel.replace('<a class="asteriskIndicator"> *</a>', '');
+                    domAttr.set(node.focusNode, "aria-required", "true");
+                  } else if (fieldLabel.indexOf('<span class="atiRequiredField"> *</span>') >= 0) {
+                    fieldLabel = fieldLabel.replace('<span class="atiRequiredField"> *</span>', '');
+                    domAttr.set(node.focusNode, "aria-required", "true");
+                  } else {
+                    domAttr.set(node.focusNode, "aria-required", "false");
+                  }
+                  domAttr.set(node.focusNode, "aria-label", fieldLabel);
+                }
+              }
+            }));
+          }
+          nodeObj.firstNode = this._getFirstFocusNodeForAttributeInspectorScreen();
+          nodeObj.lastNode = this._getLastFocusNodeForAttributeInspectorScreen();
+        } else if (screen === "copyFeatures") {
+          nodeObj = this._getFirstAndLastFocusNodeForCopyFeaeturesScreen();
+        }
+        return nodeObj;
+      },
+
+      _getFirstFocusNodeForTemplatePickerScreen: function () {
+        var firstNode;
+        //Check if display preset option is configured to display at top
+        if (this.config.editor.hasOwnProperty("displayPresetTop") &&
+          this.config.editor.displayPresetTop === true &&
+          domStyle.get(this.presetFieldsTableDiv, "display") === "block") {
+          firstNode = registry.byId("savePresetValueSwitch").domNode;
+        } else {
+          //Decription is dispalyed it will be the first node
+          if (domStyle.get(this.templateTitle, "display") === "block") {
+            firstNode = this.templateTitle;
+          } else if (this.config.editor.useFilterEditor) {
+            //If filter editor is enabled, set its dom node as the first focus node
+            firstNode = this._filterEditor.selectDropDown;
+            //If filter display shape selector is enabled and copy featues is enabled,
+            //set its dom node as the first focus node
+          } else if (this.config.editor.displayShapeSelector === true ||
+            (this.config.editor.hasOwnProperty("createNewFeaturesFromExisting") &&
+              (this.config.editor.createNewFeaturesFromExisting === true))) {
+            firstNode = this.drawingTool.focusNode;
+            //If auto save functionality is enabled,
+            //set its dom node as the first focus node
+          } else if (this.config.editor.autoSaveEdits) {
+            firstNode = registry.byId("autoSaveSwitch").domNode;
+            //If preset table is enable,
+            //set its dom node as the first focus node
+          } else if (domStyle.get(this.presetFieldsTableDiv, "display") === "block") {
+            firstNode = registry.byId("savePresetValueSwitch").domNode;
+          }
+        }
+        return firstNode;
+      },
+
+      _getLastFocusNodeForTemplatePickerScreen: function () {
+        var lastNode;
+        //Check if display preset option is configured to display at botto,
+        if (this.config.editor.hasOwnProperty("displayPresetTop") &&
+          this.config.editor.displayPresetTop === false &&
+          domStyle.get(this.presetFieldsTableDiv, "display") === "block") {
+          //If preset is enabled,
+          //check for all the preset groups
+          //and accordingly set the last focus node
+          var presetValueTable = query("#eePresetValueBody")[0];
+          if (presetValueTable) {
+            var inputElements = query(".preset-value-editable .ee-inputField");
+            inputElements.reverse();
+            array.some(inputElements, lang.hitch(this, function (ele) {
+              if (!domClass.contains(ele.parentElement.parentElement, "esriCTHidden")) {
+                if (ele.parentElement.children.length > 1) {
+                  lastNode = ele.parentElement.children[1];
+                } else {
+                  lastNode = ele;
+                }
+                return true;
+              }
+            }));
+          }
+          //If all the preset groups are hidden
+          //then set the last node as preset checkbox node
+          if (!lastNode) {
+            lastNode = registry.byId("savePresetValueSwitch").domNode;
+          }
+        } else if (this.config.editor.autoSaveEdits && !this._creationDisabledOnAll) {
+          lastNode = registry.byId("autoSaveSwitch").domNode;
+          //If preset table is enable,
+          //set its dom node as the last focus node
+        } else if ((this.config.editor.displayShapeSelector === true ||
+          (this.config.editor.hasOwnProperty("createNewFeaturesFromExisting") &&
+            (this.config.editor.createNewFeaturesFromExisting === true))) &&
+          !this._creationDisabledOnAll) {
+          lastNode = this.drawingTool.focusNode;
+          //If auto save functionality is enabled,
+          //set its dom node as the last focus node
+        } else if (this.config.editor.useFilterEditor && !this._creationDisabledOnAll) {
+          lastNode = this._filterEditor.filterTextBox;
+          //If filter display shape selector is enabled and copy featues is enabled,
+          //set its dom node as the last focus node
+        } else if (domStyle.get(this.templateTitle, "display") === "block") {
+          //Decription is dispalyed it will be the last node
+          lastNode = this.templateTitle;
+        } else if (domStyle.get(this.presetFieldsTableDiv, "display") === "block") {
+          //Check if preset is enabled
+          //accodingly set the last  focus node
+          var presetValueTable = query("#eePresetValueBody")[0];
+          if (presetValueTable) {
+            var inputElements = query(".preset-value-editable .ee-inputField");
+            inputElements.reverse();
+            array.some(inputElements, lang.hitch(this, function (ele) {
+              if (!domClass.contains(ele.parentElement.parentElement, "esriCTHidden")) {
+                if (ele.parentElement.children.length > 1) {
+                  lastNode = ele.parentElement.children[1];
+                } else {
+                  lastNode = ele;
+                }
+                return true;
+              }
+            }));
+          }
+          if (!lastNode) {
+            lastNode = registry.byId("savePresetValueSwitch").domNode;
+          }
+        }
+        return lastNode;
+      },
+
+      _getFirstFocusNodeForAttributeInspectorScreen: function () {
+        var firstNode;
+        //Check the position of action buttons
+        if (this.config.editor.showActionButtonsAbove) {
+          firstNode = this.cancelButton;
+        } else {
+          //Check number of features in current Attribute Inspector
+          if (this.attrInspector._numFeatures === 1) {
+            var itemNode, layerDescriptionNode;
+            itemNode = query(".esriCTItem", this.contentWrapper);
+            layerDescriptionNode = query(".editDescription", this.contentWrapper);
+            //If only one feature is found and no related features are present then
+            //set focus to items list node as a first focus node
+            //else set first control as the firs node in AI
+            if (itemNode && itemNode.length > 0 &&
+              !domClass.contains(itemNode[0], "esriCTDisableToggling")) {
+              firstNode = itemNode[0].children[0];
+            } else if (layerDescriptionNode && layerDescriptionNode.length > 0) {
+              firstNode = layerDescriptionNode[0];
+            }
+            else if (this.attrInspector && this.attrInspector.attributeTable) {
+              var nodes = registry.findWidgets(this.attrInspector.attributeTable);
+              array.some(nodes, lang.hitch(this, function (node) {
+                if (node.focusNode &&
+                  !domClass.contains(node.domNode.parentElement.parentElement, "hideField")) {
+                  firstNode = node.focusNode;
+                  return true;
+                }
+              }));
+              //If attachment editor form control is enabled
+              if (!firstNode && this.attrInspector._attachmentEditor &&
+                domStyle.get(this.attrInspector._attachmentEditor.domNode, "display") === "block") {
+                var attachmentList = this.attrInspector._attachmentEditor._attachmentList.childNodes;
+                if (attachmentList && attachmentList.length > 0) {
+                  firstNode = attachmentList.children[0];
+                } else if (!firstNode) {
+                  if (this.attrInspector._attachmentEditor._uploadForm &&
+                    domStyle.get(this.attrInspector._attachmentEditor._uploadForm, "display") === "block") {
+                    firstNode = this.attrInspector._attachmentEditor._uploadForm;
+                  }
+                }
+              }
+              //If attachment uplaoder form control is enabled
+              if (!firstNode && this.attrInspector._attachmentUploader &&
+                this.attrInspector._attachmentUploader.attachmentUploader) {
+                var uplaoderFirstNode;
+                uplaoderFirstNode =
+                  query("form", this.attrInspector._attachmentUploader.attachmentUploader);
+                if (uplaoderFirstNode && uplaoderFirstNode.length > 0) {
+                  uplaoderFirstNode = uplaoderFirstNode[0];
+                  if (domStyle.get(uplaoderFirstNode.children[0], "display") !== "none") {
+                    firstNode = uplaoderFirstNode.children[0];
+                  } else {
+                    firstNode = uplaoderFirstNode.children[1];
+                  }
+                }
+              }
+              //If all the fields in the AI are disabled or displayed off
+              if (this._traversal.length < 2 && this._editGeomSwitch.domNode &&
+                !firstNode && domStyle.get(this._editGeomSwitch.domNode.parentNode, "display") === "block") {
+                firstNode = this._editGeomSwitch.domNode;
+              }
+              //If all the fields inside AI are disabled and edit geo switch is disabled
+              if (!firstNode) {
+                firstNode = this.cancelButton;
+              }
+            }
+          } else if (this.attrInspector._numFeatures > 1) {
+            //If more then one feature is present in AI,
+            //first nav button as the first focus node
+            var navButtonWidgets = registry.findWidgets(this.attrInspector.navButtons);
+            firstNode = navButtonWidgets[0].focusNode;
+          }
+        }
+        return firstNode;
+      },
+
+      _getLastFocusNodeForAttributeInspectorScreen: function () {
+        var lastNode;
+        //If action buttons acre configured to show at the bottom
+        //then check for the last node in buttons container
+        if (!this.config.editor.showActionButtonsAbove) {
+          var saveBtn = query(".saveButton", this.buttonHeader)[0];
+          if (domClass.contains(saveBtn, "jimu-state-disabled")) {
+            //if delete button is displayed then it will be the last node else cancle button
+            var deleteButton = query(".deleteButton", this.buttonHeader);
+            if (deleteButton.length > 0) {
+              deleteButton = deleteButton[0];
+              if (domStyle.get(deleteButton, "display") === "block") {
+                lastNode = deleteButton;
+              } else {
+                lastNode = this.cancelButton;
+              }
+            } else {
+              lastNode = this.cancelButton;
+            }
+          } else {
+            lastNode = saveBtn;
+          }
+        }
+        //Check if related layer item exist and it is open
+        //then set the last node in related item list
+        var relatedTitleContainer, detailsContainer, relatedItemDOM;
+        detailsContainer = query(".detailsContainer", this.mainContainer);
+        detailsContainer = array.filter(detailsContainer, function (item) {
+          if (!domClass.contains(item, "hidden"))
+            return item;
+        })
+        relatedItemDOM = query(".esriCTRelatedItemContent", detailsContainer[0]);
+        if (!lastNode && relatedItemDOM && relatedItemDOM.length > 0) {
+          if (domClass.contains(relatedItemDOM[0], "esriCTItemContentActive")) {
+            lastNode = query(".esriCTLastRelatedItem", relatedItemDOM[0])[0];
+          } else {
+            relatedTitleContainer = query("[isrelateditem=true]", this.mainContainer);
+            if (relatedTitleContainer && relatedTitleContainer.length > 0) {
+              lastNode = relatedTitleContainer[relatedTitleContainer.length - 1];
+            }
+          }
+        }
+        //Check if the actions buttons are enabled
+        //then set the last node
+        if (!lastNode) {
+          var actionButtons;
+          actionButtons = query(".esriCTActionButtons", this.attrInspector.domNode);
+          array.forEach(actionButtons, lang.hitch(this, function (button) {
+            if (domStyle.get(button, "display") === "block") {
+              lastNode = button;
+            }
+          }));
+        }
+        //If geometery edit switch is enabled
+        //then set last focus node to the domnode of geometry eidt switch
+        if (this._traversal.length < 2 && this._editGeomSwitch.domNode &&
+          !lastNode && domStyle.get(this._editGeomSwitch.domNode.parentNode, "display") === "block") {
+          lastNode = this._editGeomSwitch.domNode;
+        }
+        //If attachment upload form control is enabled
+        //then last focus node to upload form control
+        if (!lastNode && this.attrInspector._attachmentEditor &&
+          domStyle.get(this.attrInspector._attachmentEditor.domNode, "display") === "block") {
+          if (this.attrInspector._attachmentEditor._uploadForm &&
+            domStyle.get(this.attrInspector._attachmentEditor._uploadForm, "display") === "block") {
+            lastNode = this.attrInspector._attachmentEditor._uploadForm;
+          } else {
+            //If upload form is disabled and attachments are shown
+            //then set the last attachment node as last attachment
+            var attachmentList = this.attrInspector._attachmentEditor._attachmentList.childNodes;
+            if (attachmentList && attachmentList.length > 0) {
+              var lastAttachmentNode = attachmentList[attachmentList.length - 1];
+              if (domStyle.get(lastAttachmentNode.children[1], "display") === "block") {
+                lastNode = lastAttachmentNode.children[1]
+              } else {
+                lastNode = lastAttachmentNode.children[0];
+              }
+            }
+          }
+        }
+        //Loop through all the widget controls in AI
+        //then set the last focus node accordingly
+        if (!lastNode && this.attrInspector && this.attrInspector.attributeTable) {
+          var nodes = registry.findWidgets(this.attrInspector.attributeTable);
+          nodes.reverse();
+          array.some(nodes, lang.hitch(this, function (node) {
+            if (node.focusNode &&
+              !domClass.contains(node.domNode.parentElement.parentElement, "hideField")) {
+              lastNode = node.focusNode;
+              return true;
+            }
+          }));
+        }
+        //Check if more than one featurs are present
+        //then set the last focus node
+        if (!lastNode && this.attrInspector._numFeatures > 1) {
+          //If more then one feature is present in AI,
+          //first nav button as the first focus node
+          var navButtonWidgets = registry.findWidgets(this.attrInspector.navButtons);
+          lastNode = navButtonWidgets[navButtonWidgets.length - 1].focusNode;
+        }
+        //Check position of save and clear button and set the last focus node
+        //then set the last focus node accordingly
+        if (!lastNode && this.config.editor.showActionButtonsAbove) {
+          var saveBtn = query(".saveButton", this.buttonHeader)[0];
+          if (domClass.contains(saveBtn, "jimu-state-disabled")) {
+            lastNode = this.cancelButton;
+          } else {
+            lastNode = saveBtn;
+          }
+        }
+        return lastNode;
+      },
+
+      _getFirstAndLastFocusNodeForCopyFeaeturesScreen: function () {
+        return {
+          "firstNode": this._copyFeaturesObj.warningMessage,
+          "lastNode": this._copyFeaturesObj.cancelBtn
+        };
       }
     });
   });
