@@ -17,6 +17,7 @@ define({
     savePromptTitle: "Save feature",
     savePrompt: "Would you like to save the current feature?",
     deletePromptTitle: "Delete feature",
+    deleteAttachment: "Delete attachment",
     deletePrompt: "Are you sure you want to delete the selected feature?",
     attachmentLoadingError: "Error uploading attachments",
     attachmentSaveDeleteWarning: "Warning: Changes to attachments are saved automatically",
@@ -24,6 +25,8 @@ define({
     addNewFeature: "Create new feature",
     featureCreationFailedMsg: "Cannot create a new record/feature",
     relatedItemTitle: "Related Table/Layer",
+    relatedFeatureCount: "${layerTitle} with ${featureCount} features",
+    createNewFeatureLabel:"Create new feature for ${layerTitle}",
     invalidRelationShipMsg: "Please make sure the primary key field: \'${parentKeyField}\' has a valid value",
     pendingFeatureSaveMsg: "Please save the feature edits before creating a related feature.",
     attachmentsRequiredMsg: "(*) Attachments are required.",
@@ -35,10 +38,15 @@ define({
     yAttributeTextBoxLabel :"Y-coordinate:",
     latitudeTextBoxLabel : "Latitude:",
     longitudeTextBoxLabel : "Longitude:",
+    presetGroupFieldsLabel: "'${groupName}' will be applied to the following layer fields:",
+    presetGroupNoFieldsLabel: "'${groupName}' does not have any associated fields",
+    groupInfoLabel: "Group information for '${groupName}'",
+    editGroupInfoIcon: "Edit group value for ${groupName}",
     filterEditor:{
       all: "All",
       noAvailableTempaltes: "No available templates",
-      searchTemplates: "Search Templates"
+      searchTemplates: "Search Templates",
+      filterLayerLabel: "Filter layers"
     },
     invalidConfiguration: "Widget is either not configured or the layers in the configuration are no longer in the map.  Please open the app in the builder mode and reconfigure the widget.",
     geometryServiceURLNotFoundMSG: "Unable to get Geometry Service URL",
@@ -55,14 +63,29 @@ define({
       createFeatures: "Create Features",
       createSingleFeature: "Create 1 Multi-Geometry Feature",
       noFeaturesSelectedMessage: "No Features Selected",
-      selectFeatureToCopyMessage: "Please select features to copy."
+      selectFeatureToCopyMessage: "Please select features to copy.",
+      multipleFeatureSaveWarning: "Note: Creating multiple features using copy feature will save all the features immediately"
     },
     addingFeatureError: "Error while adding selected features in the layer. Please try again.", // error message while adding features
     addingFeatureErrorCount: "\'${copyFeatureErrorCount}\' features failed to be copied.", // displayed when few/all the features gets failed to be copied
     selectingFeatureError: "Error while selecting features in the layer. Please try again.", // error message while selecting features
     customSelectOptionLabel: "Select features to copy", // displayed as a label for custom select tool
     noFeatureSelectedMessage: "No features selected.", // Displayed when no features are selected while using custom select tool
-    multipleFeatureSaveMessage: "All the features will be saved immediately. Do you want to proceed?"
+    multipleFeatureSaveMessage: "All the features will be saved immediately. Do you want to proceed?",
+    relativeDates: {
+      dateTypeLabel: "Date Type",
+      valueLabel: "Value",
+      fixed: "Fixed",
+      current: "Current",
+      past: "Past",
+      future: "Future",
+      popupTitle : "Select Value",
+      hintForFixedDateType: "Hint: Specified date and time will be used as preset default value",
+      hintForCurrentDateType: "Hint: Current date and time will be used as preset default value",
+      hintForPastDateType: "Hint: The specified value will be subtracted from the current date and time for the default value of the preset.",
+      hintForFutureDateType: "Hint: The specified value will be added to the current date and time for the default value of the preset.",
+      noDateDefinedTooltip: "No date defined"
+    }
   }),
   "ar": 1,
   "bs": 1,
